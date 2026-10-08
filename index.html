@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>No Way Home Launcher</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            gap: 20px;
+        }
+        .launcher-card {
+            background-color: #1e1e1e;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            text-align: center;
+            border: 1px solid #333;
+            width: 320px;
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 2rem;
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        label {
+            display: block;
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        select {
+            width: 100%;
+            padding: 12px;
+            background-color: #2a2a2a;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 6px;
+            font-size: 1rem;
+            outline: none;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        select:focus {
+            border-color: #38ef7d;
+        }
+        /* Dynamic Button Styles */
+        #playBttn {
+            width: 100%;
+            color: white;
+            border: none;
+            padding: 16px 0;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+        /* Play State (Green like Minecraft) */
+        .state-play {
+            background-color: #2ecc71;
+        }
+        .state-play:hover {
+            background-color: #27ae60;
+            transform: translateY(-2px);
+        }
+        /* Stop State (Red) */
+        .state-stop {
+            background-color: #e74c3c;
+        }
+        .state-stop:hover {
+            background-color: #c0392b;
+        }
+        #playBttn:active {
+            transform: translateY(0);
+        }
+
+        /* Launcher Console Layout */
+        .console-container {
+            width: 500px;
+            height: 480px;
+            background-color: #0b0b0b;
+            border: 1px solid #222;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+        }
+        .console-header {
+            background-color: #181818;
+            padding: 10px 15px;
+            font-size: 0.85rem;
+            color: #888;
+            border-top-left-radius: 11px;
+            border-top-right-radius: 11px;
+            border-bottom: 1px solid #222;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+        #consoleLog {
+            flex-grow: 1;
+            padding: 15px;
+            margin: 0;
+            overflow-y: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #38ef7d;
+            white-space: pre-wrap;
+        }
+        .log-error { color: #ff4757; }
+        .log-system { color: #3498db; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <!-- Left Box: Launcher Controls -->
+    <div class="launcher-card">
+        <h1>No Way Home</h1>
+        <div class="subtitle">Game Launcher</div>
+        
+        <div class="form-group">
+            <label for="versionSelect">Select Version</label>
+            <select id="versionSelect">
+                <option value="0.1.0">v0.1.0</option>
+                <option value="0.2.0">v0.2.0</option>
+                <option value="0.3.0">v0.3.0</option>
+                <option value="0.4.0">v0.4.0</option>
+                <option value="0.5.0">v0.5.0</option>
+                <option value="0.5.1">v0.5.1</option>
+                <option value="0.6.0">v0.6.0</option>
+                <option value="1.0.0-Beta-1" selected>v1.0.0-Beta-1 (Latest)</option>
+                <option value="1.0.0-Beta-2" disabled>v1.0.0-Beta-2 (In Development)</option>
+            </select>
+        </div>
+
+        <button id="playBttn" class="state-play">PLAY</button>
+    </div>
+
+    <!-- Right Box: Console Output Window -->
+    <div class="console-container">
+        <div class="console-header">DEVELOPER CONSOLE LOGS</div>
+        <pre id="consoleLog"><span class="log-system">[System] Launcher ready. Select a version and press PLAY...</span></pre>
+    </div>
+
+    <script>
+        const button = document.getElementById('playBttn');
+        const versionSelect = document.getElementById('versionSelect');
+        const consoleLog = document.getElementById('consoleLog');
+        
+        let gameWindow = null;
+        let monitorInterval = null;
+
+        // Custom function to append messages into launcher log view
+        function appendLog(text, type = 'info') {
+            const span = document.createElement('span');
+            span.innerText = `\n[${new Date().toLocaleTimeString()}] ${text}`;
+            if (type === 'error') span.className = 'log-error';
+            if (type === 'system') span.className = 'log-system';
+            consoleLog.appendChild(span);
+            consoleLog.scrollTop = consoleLog.scrollHeight; // Auto scroll down
+        }
+
+        // Intercept logs out of the child window
+        function hookGameConsole() {
+            if (!gameWindow) return;
+
+            // Intercept standard console logs
+            const originalLog = gameWindow.console.log;
+            gameWindow.console.log = function(...args) {
+                appendLog(args.join(' '), 'info');
+                if (originalLog) originalLog.apply(gameWindow.console, args);
+            };
+
+            // Intercept error logs
+            const originalError = gameWindow.console.error;
+            gameWindow.console.error = function(...args) {
+                appendLog(args.join(' '), 'error');
+                if (originalError) originalError.apply(gameWindow.console, args);
+            };
+
+            // Capture unhandled runtime page errors
+            gameWindow.addEventListener('error', (event) => {
+                appendLog(`${event.message} at ${event.filename}:${event.lineno}`, 'error');
+            });
+        }
+
+        function setLauncherState(isRunning) {
+            if (isRunning) {
+                button.innerText = 'STOP';
+                button.className = 'state-stop';
+                versionSelect.disabled = true;
+            } else {
+                button.innerText = 'PLAY';
+                button.className = 'state-play';
+                versionSelect.disabled = false;
+                clearInterval(monitorInterval);
+                gameWindow = null;
+            }
+        }
+
+        button.addEventListener('click', () => {
+            // If game is active, clicking button acts as a STOP kill switch
+            if (gameWindow && !gameWindow.closed) {
+                appendLog('[System] Stopping game instance...', 'system');
+                gameWindow.close();
+                setLauncherState(false);
+                return;
+            }
+
+            const selectedVersion = versionSelect.value;
+            let folderName = '';
+
+            if (selectedVersion.toLowerCase().includes('beta')) {
+                folderName = `No way home ${selectedVersion}`;
+            } else {
+                folderName = `No way home ALPHA ${selectedVersion}`;
+            }
+
+            // Put your base GitHub Pages link here (Keep the trailing slash)
+            // Example: https://github.io
+            const githubPagesBase = "https://github.io";
+            const gameUrl = `${githubPagesBase}${folderName}/index.html`;
+
+            appendLog(`[System] Launching ${selectedVersion}...`, 'system');
+            
+            const windowSpecs = 'width=800,height=600,scrollbars=yes,resizable=yes';
+            gameWindow = window.open(gameUrl, '_blank', windowSpecs);
+
+            if (gameWindow) {
+                setLauncherState(true);
+
+                // Wait briefly for the window DOM environment to load, then bind the console hooks
+                gameWindow.addEventListener('load', () => {
+                    hookGameConsole();
+                    appendLog('[System] Console context connected successfully.', 'system');
+                });
+
+                // Fail-safe check in case the load event finishes before binding completes
+                setTimeout(hookGameConsole, 500);
+
+                // Monitor loop checking if user manually exits out of the game window
+                monitorInterval = setInterval(() => {
+                    if (gameWindow && gameWindow.closed) {
+                        appendLog('[System] Game window closed by user.', 'system');
+                        setLauncherState(false);
+                    }
+                }, 1000);
+
+            } else {
+                appendLog('[Error] Popup blocked! Enable popups to allow launcher execution.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
